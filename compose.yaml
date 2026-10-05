@@ -19,5 +19,64 @@ services:
       retries: 10
       start_period: 10s
 
+  # Emula o AWS SQS localmente. Versão fixada: imagens mais novas exigem token.
+  localstack:
+    image: localstack/localstack:4.4
+    restart: unless-stopped
+    environment:
+      SERVICES: sqs
+      AWS_DEFAULT_REGION: ${AWS_REGION:-us-east-1}
+      SQS_ENDPOINT_STRATEGY: path
+    ports:
+      - "127.0.0.1:${LOCALSTACK_PORT:-4566}:4566"
+    volumes:
+      - ./infra/localstack/init:/etc/localstack/init/ready.d:ro
+    healthcheck:
+      # Saudável só depois que o script de init criou as filas.
+      test: [CMD-SHELL, test -f /tmp/queues-ready]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  # Aplica as migrations uma vez antes das instâncias da aplicação subirem.
+  migrate:
+    profiles: [app]
+    build: .
+    command: [bun, run, scripts/migrate.ts, up]
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Três instâncias concorrentes: `docker compose --profile app up -d --build`.
+  app:
+    profiles: [app]
+    build: .
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      SQS_ENDPOINT: http://localstack:4566
+      PORT: 3000
+    deploy:
+      replicas: 3
+    ports:
+      - "127.0.0.1:3001-3003:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      localstack:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD-SHELL, "bun -e \"fetch('http://127.0.0.1:3000/health/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    stop_grace_period: 30s
+
 volumes:
   postgres_data:
