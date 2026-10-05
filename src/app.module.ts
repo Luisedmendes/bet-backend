@@ -12,6 +12,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       entities: ['./dist/entities'],
       entitiesTs: ['./src/entities'],
       dbName: 'my-db-name.sqlite3',
+      autoLoadEntities: true
     })
   ],
   controllers: [AppController],
