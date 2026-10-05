@@ -33,7 +33,6 @@ export class Money {
     };
 
     static zero(currency: string): Money {
-        // Passa pelo from para validar a moeda.
         return Money.from({ amount: '0.00', currency })
     };
 
@@ -49,7 +48,6 @@ export class Money {
     };
 
     negate(): Money {
-        // -0n === 0n, então zero continua "0.00".
         return new Money(-this.cents, this.currency)
     };
 
